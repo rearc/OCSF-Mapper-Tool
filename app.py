@@ -23,6 +23,9 @@ from pathlib import Path
 
 import streamlit as st
 
+# `ocsf_mapper` is a package directory sitting next to this file in the repo
+# (NOT pip installed). app.py runs from the repo root, so a plain import
+# resolves it directly — no sys.path manipulation needed.
 from ocsf_mapper import run
 from ocsf_mapper.fetch_ocsf import fetch_classes_list, fetch_class
 from ocsf_mapper.profiler import detect_format, profile, render_profile_for_llm
@@ -34,6 +37,7 @@ from ocsf_mapper.reference_library import parse_preset_metadata
 DEFAULT_REFERENCE_DIR = "/Volumes/dsl_dev/internal/ocsf_mapper/preset_library"
 DEFAULT_OUTPUT_DIR = "/Volumes/dsl_dev/internal/ocsf_mapper/generated_presets"
 DEFAULT_CACHE_DIR = "/Volumes/dsl_dev/internal/ocsf_mapper/schema_cache"
+DEFAULT_ADVISORY_DIR = "/Volumes/dsl_dev/internal/ocsf_mapper/advisory"
 DEFAULT_OCSF_VERSION = "1.7.0"
 
 # ─── Volume access (Databricks SDK) ──────────────────────────────────────────
@@ -106,6 +110,36 @@ def volume_download_dir(volume_dir: str) -> str:
         return volume_dir
     local = Path(tempfile.mkdtemp(prefix="ocsf_ref_"))
     for p in volume_list_yaml(volume_dir):
+        try:
+            (local / Path(p).name).write_bytes(volume_read_bytes(p))
+        except Exception:
+            continue
+    return str(local)
+
+
+def volume_list_md(directory: str) -> list[str]:
+    """List .md files in a Volume directory (advisory folder)."""
+    if not _in_app():
+        p = Path(directory)
+        return sorted(str(x) for x in p.glob("*.md")) if p.is_dir() else []
+    try:
+        w = _sdk()
+        entries = list(w.files.list_directory_contents(directory))
+        return sorted(e.path for e in entries if e.path and e.path.endswith(".md"))
+    except Exception:
+        return []
+
+
+def volume_download_advisory_dir(volume_dir: str) -> str:
+    """Download .md advisory files from a Volume folder to a local temp dir.
+
+    Separate from volume_download_dir (which only copies YAML) because the
+    advisory folder holds markdown, not presets.
+    """
+    if not _in_app():
+        return volume_dir
+    local = Path(tempfile.mkdtemp(prefix="ocsf_adv_"))
+    for p in volume_list_md(volume_dir):
         try:
             (local / Path(p).name).write_bytes(volume_read_bytes(p))
         except Exception:
@@ -191,6 +225,7 @@ def _init_state():
         "api_key": os.environ.get("ANTHROPIC_API_KEY", ""),
         "ocsf_version": DEFAULT_OCSF_VERSION,
         "reference_dir": DEFAULT_REFERENCE_DIR,
+        "advisory_dir": DEFAULT_ADVISORY_DIR,
         "output_dir": DEFAULT_OUTPUT_DIR,
     }
     for k, v in defaults.items():
@@ -426,6 +461,7 @@ with st.sidebar:
         else:
             status_pill(f"⚠ {_msg}", "err")
     st.session_state.reference_dir = st.text_input("Reference library", value=st.session_state.reference_dir)
+    st.session_state.advisory_dir = st.text_input("Advisory folder", value=st.session_state.advisory_dir)
     st.session_state.output_dir = st.text_input("Output Volume", value=st.session_state.output_dir)
     st.divider()
     if volume_exists(st.session_state.reference_dir):
@@ -436,6 +472,10 @@ with st.sidebar:
             status_pill("📚 Library folder is empty", "warn")
     else:
         status_pill("📚 Library path does not exist", "err")
+    if st.session_state.advisory_dir and volume_exists(st.session_state.advisory_dir):
+        status_pill("📝 Advisory folder found", "ok")
+    else:
+        status_pill("📝 No advisory folder — generation proceeds without it", "warn")
 
 # ─── Tab 1: Generator ────────────────────────────────────────────────────────
 
@@ -509,6 +549,12 @@ def render_generator_tab():
 
                 local_sample = volume_download_to_local(sample_path)
                 local_refs = volume_download_dir(st.session_state.reference_dir)
+                local_advisory = (
+                    volume_download_advisory_dir(st.session_state.advisory_dir)
+                    if st.session_state.advisory_dir
+                    and volume_exists(st.session_state.advisory_dir)
+                    else None
+                )
                 local_cache = "/tmp/ocsf_mapper_cache" if _in_app() else DEFAULT_CACHE_DIR
 
                 stream_state = {"tokens": [], "since_flush": 0}
@@ -565,6 +611,7 @@ def render_generator_tab():
                     ocsf_version=st.session_state.ocsf_version,
                     class_uids=class_uids,
                     reference_dir=local_refs,
+                    advisory_dir=local_advisory,
                     cache_dir=local_cache,
                     out_dir="/tmp/ocsf_mapper_output",
                     verbose=False,

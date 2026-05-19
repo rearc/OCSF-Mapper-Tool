@@ -19,6 +19,7 @@ from .profiler import detect_format, profile
 from .reference_library import scan_library, select_references, describe_selection
 from .ocsf_types import spark_type_for, OCSF_TO_SPARK, is_timestamp_type, is_datetime_type
 from .validator import validate_preset_text, format_findings, Finding
+from .advisory import load_advisory
 
 __version__ = "0.4.0"
 
@@ -40,5 +41,6 @@ __all__ = [
     "validate_preset_text",
     "format_findings",
     "Finding",
+    "load_advisory",
     "__version__",
 ]

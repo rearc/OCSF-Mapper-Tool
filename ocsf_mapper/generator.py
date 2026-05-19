@@ -16,6 +16,7 @@ from .profiler import detect_format, profile, render_profile_for_llm
 from .schema_loader import resolve_class_compact, lookup_class, list_classes
 from .ocsf_types import TYPE_MAPPING_PROMPT
 from .validator import validate_preset_text, format_findings
+from .advisory import load_advisory
 
 
 SYSTEM_PROMPT = """You are an expert at writing Lakewatch data source presets that normalize vendor security data to OCSF (Open Cybersecurity Schema Framework) schemas. You are generating a preset.yaml for the Rearc security-content-library repo.
@@ -84,6 +85,14 @@ Set `autoloader.format` accordingly. If `json_wrapped`, note that bronze must ex
 
 {multi_class_guidance}
 
+## Team advisory / conventions
+
+Authoritative team guidance — naming conventions, OCSF type rules, known
+platform gotchas. These instructions OVERRIDE anything inferred from the
+style reference below. Follow them exactly.
+
+{advisory}
+
 ## Style reference: existing team preset
 
 Follows team conventions. Mirror its structure — field ordering, named_struct shapes, unmapped pattern. Do NOT copy silver expressions verbatim; they are vendor-specific.
@@ -130,6 +139,7 @@ def generate_preset(
     ocsf_version: str = "1.7.0",
     style_reference_path: str | None = None,
     reference_dir: str | None = None,
+    advisory_dir: str | None = None,
     max_references: int = 2,
     out_dir: str = "./output",
     max_profile_fields: int = 120,
@@ -209,6 +219,10 @@ def generate_preset(
     else:
         style_ref = ""
 
+    # Load team advisory context (OCSF type rules, conventions, gotchas).
+    # A missing/empty advisory folder is fine — yields "".
+    advisory_text = load_advisory(advisory_dir)
+
     client = Anthropic()
     user_prompt = USER_TEMPLATE.format(
         vendor=vendor,
@@ -221,6 +235,7 @@ def generate_preset(
         fmt_notes=fmt["notes"],
         target_classes_schemas=target_classes_schemas,
         multi_class_guidance=multi_class_guidance,
+        advisory=advisory_text or "(no team advisory file configured)",
         style_reference=style_ref or "(no style reference — follow system-prompt conventions)",
     )
 
