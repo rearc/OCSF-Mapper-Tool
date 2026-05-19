@@ -107,3 +107,57 @@ def test_validator_passes_clean_preset():
 def test_validator_handles_bad_yaml():
     findings = validate_preset_text("this: : : not valid")
     assert any(f.level == "error" for f in findings)
+
+
+# ─── API-derived type map (issue #47) ────────────────────────────────────────
+
+from ocsf_mapper.ocsf_types import derive_type_map, render_type_map_for_llm
+
+_RESOLVED_CLASS = {
+    "uid": 2002,
+    "caption": "Vulnerability Finding",
+    "attributes": {
+        "class_uid":  {"type": "integer_t"},
+        "type_uid":   {"type": "integer_t"},   # cache says int — override forces BIGINT
+        "time":       {"type": "timestamp_t"},
+        "message":    {"type": "string_t"},
+        "unmapped":   {"type": "json_t"},
+        "metadata":   {"object_type": "metadata", "attributes": {
+            "version":     {"type": "string_t"},
+            "logged_time": {"type": "timestamp_t"},
+        }},
+    },
+}
+
+
+def test_derive_type_map_reads_schema_types():
+    tm = derive_type_map(_RESOLVED_CLASS)
+    assert tm["class_uid"] == "INT"
+    assert tm["time"] == "BIGINT"
+    assert tm["message"] == "STRING"
+    assert tm["unmapped"] == "VARIANT"
+
+
+def test_derive_type_map_recurses_into_nested_objects():
+    tm = derive_type_map(_RESOLVED_CLASS)
+    assert tm["metadata.logged_time"] == "BIGINT"
+    assert tm["metadata.version"] == "STRING"
+    # the object itself is not yielded, only its leaves
+    assert "metadata" not in tm
+
+
+def test_derive_type_map_override_still_applies():
+    # schema cache says type_uid is integer_t; the name override must win.
+    tm = derive_type_map(_RESOLVED_CLASS)
+    assert tm["type_uid"] == "BIGINT"
+
+
+def test_derive_type_map_empty_class():
+    assert derive_type_map({}) == {}
+    assert derive_type_map({"attributes": {}}) == {}
+
+
+def test_render_type_map_for_llm():
+    out = render_type_map_for_llm(derive_type_map(_RESOLVED_CLASS))
+    assert "time  ->  BIGINT" in out
+    assert render_type_map_for_llm({}) == "(no schema-derived types available)"

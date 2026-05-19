@@ -17,7 +17,8 @@ from .generator import generate_preset
 from .schema_loader import list_classes, lookup_class, summarize_cache
 from .profiler import detect_format, profile
 from .reference_library import scan_library, select_references, describe_selection
-from .ocsf_types import spark_type_for, OCSF_TO_SPARK, is_timestamp_type, is_datetime_type
+from .ocsf_types import (spark_type_for, OCSF_TO_SPARK, is_timestamp_type,
+                          is_datetime_type, derive_type_map, render_type_map_for_llm)
 from .validator import validate_preset_text, format_findings, Finding
 from .advisory import load_advisory
 
@@ -38,6 +39,8 @@ __all__ = [
     "OCSF_TO_SPARK",
     "is_timestamp_type",
     "is_datetime_type",
+    "derive_type_map",
+    "render_type_map_for_llm",
     "validate_preset_text",
     "format_findings",
     "Finding",

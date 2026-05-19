@@ -14,7 +14,7 @@ from anthropic import Anthropic
 
 from .profiler import detect_format, profile, render_profile_for_llm
 from .schema_loader import resolve_class_compact, lookup_class, list_classes
-from .ocsf_types import TYPE_MAPPING_PROMPT
+from .ocsf_types import TYPE_MAPPING_PROMPT, derive_type_map, render_type_map_for_llm
 from .validator import validate_preset_text, format_findings
 from .advisory import load_advisory
 
@@ -176,9 +176,13 @@ def generate_preset(
 
     schema_blocks = []
     for uid, s in schemas.items():
+        # API-derived type map: read each field's OCSF type straight from the
+        # fetched schema, translate to Spark type. (issue #47)
+        type_map = derive_type_map(s)
         schema_blocks.append(
             f"### Class {uid} — {s['caption']} (category: {s.get('category_name', '?')})\n\n"
-            f"```json\n{json.dumps(s, indent=2)}\n```"
+            f"```json\n{json.dumps(s, indent=2)}\n```\n\n"
+            f"{render_type_map_for_llm(type_map)}"
         )
     target_classes_schemas = "\n\n".join(schema_blocks)
 

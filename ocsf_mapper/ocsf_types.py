@@ -157,3 +157,95 @@ RULES:
 - For every `timestamp_t` attribute, emit `CAST(<expr> AS BIGINT)` carrying
   epoch-millis. For every `datetime_t` attribute, emit an RFC-3339 STRING.
 """
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# API-DERIVED TYPE MAP  (issue #47)
+#
+# The OCSF_TO_SPARK table above is a hand-maintained translation table — it
+# says "OCSF `timestamp_t` becomes Spark `BIGINT`". What it does NOT say is
+# which *field* is which OCSF type. Hand-listing that (KNOWN_LONG_T_FIELDS)
+# goes stale the moment OCSF changes an attribute's type.
+#
+# The functions below close that gap. They read each attribute's declared
+# OCSF type straight from the fetched OCSF schema (the cache populated by
+# fetch_ocsf.py / read by schema_loader.py) and run it through OCSF_TO_SPARK.
+#
+# Result: the OCSF type of every field is API-derived; only the small
+# type→type translation table stays hand-maintained. When OCSF reclassifies
+# an attribute (e.g. type_uid int_t→long_t), a re-fetch picks it up with no
+# code change.
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def _walk_attributes(attrs: dict, prefix: str = ""):
+    """Yield (dotted_field_name, ocsf_type) for every scalar attribute in a
+    resolved class-schema `attributes` dict, recursing into nested objects.
+
+    `attrs` is the shape produced by schema_loader.resolve_class_compact()[
+    "attributes"] — a dict of name -> {type?, object_type?, attributes?, ...}.
+    Object/array-of-object attributes have no scalar `type`; we recurse into
+    their nested `attributes` instead of yielding them.
+    """
+    if not isinstance(attrs, dict):
+        return
+    for name, defn in attrs.items():
+        if not isinstance(defn, dict):
+            continue
+        dotted = f"{prefix}{name}"
+        nested = defn.get("attributes")
+        if isinstance(nested, dict) and nested:
+            # complex object — recurse, don't yield the object itself
+            yield from _walk_attributes(nested, prefix=f"{dotted}.")
+        else:
+            ocsf_type = defn.get("type") or defn.get("type_name")
+            yield dotted, ocsf_type
+
+
+def derive_type_map(resolved_class: dict) -> dict[str, str]:
+    """Build {field_name: spark_type} for a class, read from the OCSF schema.
+
+    Args:
+        resolved_class: the dict returned by
+                        schema_loader.resolve_class_compact(version, uid) —
+                        it has an "attributes" key.
+
+    Returns:
+        Mapping of every scalar attribute (dotted for nested fields) to its
+        Spark SQL type, derived from the schema's declared OCSF type. The
+        attribute-name override (KNOWN_LONG_T_FIELDS) still applies as a
+        safety net for a stale cache.
+    """
+    attrs = (resolved_class or {}).get("attributes", {})
+    out: dict[str, str] = {}
+    for dotted, ocsf_type in _walk_attributes(attrs):
+        leaf = dotted.rsplit(".", 1)[-1]
+        out[dotted] = spark_type_for(ocsf_type, attr_name=leaf)
+    return out
+
+
+def derive_type_map_for_classes(resolved_classes: list[dict]) -> dict[int, dict[str, str]]:
+    """Same as derive_type_map but for several classes at once.
+
+    Returns {class_uid: {field_name: spark_type}}.
+    """
+    result: dict[int, dict[str, str]] = {}
+    for rc in resolved_classes or []:
+        uid = rc.get("uid")
+        if uid is not None:
+            result[uid] = derive_type_map(rc)
+    return result
+
+
+def render_type_map_for_llm(type_map: dict[str, str]) -> str:
+    """Render a derived type map as a compact block for the generator prompt.
+
+    Lists every field with its OCSF-derived Spark type, so the model emits
+    casts that match the schema rather than guessing from a reference preset.
+    """
+    if not type_map:
+        return "(no schema-derived types available)"
+    lines = ["OCSF-derived Spark types for this class (authoritative):"]
+    for field, spark in sorted(type_map.items()):
+        lines.append(f"  {field}  ->  {spark}")
+    return "\n".join(lines)
