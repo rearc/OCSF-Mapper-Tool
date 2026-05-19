@@ -491,6 +491,12 @@ def render_generator_tab():
             unsafe_allow_html=True,
         )
 
+    # Show any generation error at the top, OUTSIDE the columns — the phase
+    # placeholders inside col_output get .empty()'d on rerun, which was
+    # swallowing the error. Rendering here makes it persistent and visible.
+    if st.session_state.get("error"):
+        st.error(st.session_state.error)
+
     col_inputs, col_output = st.columns([1, 1])
     with col_inputs:
         sample_path = st.text_input(
@@ -626,12 +632,15 @@ def render_generator_tab():
                 phase_fetch.empty()
                 phase_generate.empty()
             except Exception as e:
-                st.session_state.error = f"{e}\n\n{traceback.format_exc()}"
+                tb = traceback.format_exc()
+                st.session_state.error = f"{e}\n\n{tb}"
+                # Always emit to stdout so the Databricks App Logs tab has it,
+                # even if the in-UI error display gets cleared on rerun.
+                print("=== OCSF Mapper generation error ===", flush=True)
+                print(tb, flush=True)
 
     with col_output:
-        if st.session_state.error:
-            st.error(st.session_state.error)
-        elif st.session_state.result:
+        if st.session_state.result:
             r = st.session_state.result
             stat_cards([
                 {"num": ", ".join(str(c["uid"]) for c in r["classes"]), "label": "Classes", "kind": "primary"},
