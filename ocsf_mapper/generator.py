@@ -283,26 +283,52 @@ def generate_preset(
     type_findings = validate_preset_text(yaml_body)
     type_report = format_findings(type_findings)
 
-    class_list_md = "\n".join(f"  - **{e['uid']}** — {e['caption']} ({e.get('category_name')})" for e in entries)
-    ref_list_md = (
-        "\n".join(f"  - `{p.name}`" for p in reference_paths)
-        if reference_paths else "  - (none)"
+    # ── Build a simplified, verdict-first report ─────────────────────────────
+    # Layout: status line → what to fix → what the model did → details.
+    n_errors = sum(1 for f in type_findings if f.level == "error")
+    n_warnings = sum(1 for f in type_findings if f.level == "warning")
+    if n_errors:
+        verdict = f"⚠️  Needs fixes — {n_errors} type error(s) before this preset is valid."
+    elif n_warnings:
+        verdict = f"✓  Generated — {n_warnings} warning(s) worth a look, no blocking errors."
+    else:
+        verdict = "✓  Generated cleanly — no OCSF data-type issues found."
+
+    classes_line = ", ".join(f"{e['uid']} {e['caption']}" for e in entries)
+    refs_line = (
+        ", ".join(p.name for p in reference_paths)
+        if reference_paths else "none"
     )
-    (out / "generation_report.md").write_text(
-        f"# Generation report — {vendor}/{source_type}\n\n"
-        f"- OCSF classes:\n{class_list_md}\n"
-        f"- OCSF version: {ocsf_version}\n"
-        f"- Sample format: `{fmt['format']}` ({fmt['notes']})\n"
-        f"- Record path: `{fmt['record_path']}`\n"
-        f"- Records profiled: {prof['records_profiled']}\n"
-        f"- Distinct field paths: {prof['field_count']}\n"
-        f"- References used:\n{ref_list_md}\n"
-        f"- Model: claude-sonnet-4-5\n"
-        f"- Input tokens: {resp.usage.input_tokens}\n"
-        f"- Output tokens: {resp.usage.output_tokens}\n\n"
-        f"## OCSF data-type validation\n\n{type_report}\n\n"
-        f"## Model notes\n\n{notes}\n"
-    )
+
+    report = f"""# {vendor} / {source_type} — generation report
+
+{verdict}
+
+## What to check
+
+{type_report}
+
+## What was generated
+
+- OCSF class(es): {classes_line}
+- OCSF version: {ocsf_version}
+- Mapped from {prof['records_profiled']} sample record(s), {prof['field_count']} distinct fields
+
+## Model notes
+
+{notes}
+
+<details>
+<summary>Run details</summary>
+
+- Sample format: `{fmt['format']}` — {fmt['notes']}
+- Record path: `{fmt['record_path']}`
+- Style references: {refs_line}
+- Model: claude-sonnet-4-5
+- Tokens: {resp.usage.input_tokens} in / {resp.usage.output_tokens} out
+</details>
+"""
+    (out / "generation_report.md").write_text(report)
 
     return {
         "preset_path": str(out / "preset.yaml"),
