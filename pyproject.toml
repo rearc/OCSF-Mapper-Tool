@@ -29,4 +29,4 @@ package-dir = { "" = "src" }
 where = ["src"]
 
 [tool.setuptools.package-data]
-ocsf_mapper = ["style_reference.yaml", "ocsf_schema_cache/**/*.json"]
+ocsf_mapper = ["ocsf_schema_cache/**/*.json"]

@@ -1,6 +1,6 @@
 streamlit>=1.30
 streamlit-ace>=0.1.1
 databricks-sdk>=0.30
-anthropic>=0.40.0
-pyyaml>=6.0
-requests>=2.31
+# ocsf_mapper is now a source package in this repo (see src/ocsf_mapper/).
+# Installed editable so app.py can `import ocsf_mapper` directly.
+-e .

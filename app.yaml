@@ -1,0 +1,9 @@
+command:
+  - streamlit
+  - run
+  - app.py
+  - --server.port
+  - "8000"
+  - --server.address
+  - "0.0.0.0"
+# API key is entered in the app sidebar, not via env var.
