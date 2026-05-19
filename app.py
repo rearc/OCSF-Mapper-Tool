@@ -1,7 +1,12 @@
-"""OCSF Mapper — Databricks App (v3).
+"""OCSF Mapper — Databricks App (v4).
 
-Same four-tab functionality as v2 with a refined UI based on Rearc's palette
-and a slate/navy design language.
+Four-tab tool: Generator, Sample Inspector, OCSF Explorer, Library.
+
+v4 changes:
+  - Removed the "Submit for review" / PR-staging flow. The app now generates,
+    validates, and lets the user Save to Volume or Download. Promotion to the
+    repo (PR creation) is handled outside this app.
+  - OCSF version default corrected to 1.7.0 (1.8.0 does not exist).
 """
 from __future__ import annotations
 
@@ -24,24 +29,12 @@ from ocsf_mapper.profiler import detect_format, profile, render_profile_for_llm
 from ocsf_mapper.reference_library import parse_preset_metadata
 
 
-def get_current_user():
-    """Read the authenticated user from Databricks Apps OBO headers."""
-    headers = st.context.headers
-    return {
-        "email": headers.get("X-Forwarded-Email"),
-        "user": headers.get("X-Forwarded-User"),
-        "preferred_username": headers.get("X-Forwarded-Preferred-Username"),
-        # Catch-all so we can see what's actually available
-        "all_headers": dict(headers),
-    }
-
-
 # ─── Config ──────────────────────────────────────────────────────────────────
 
 DEFAULT_REFERENCE_DIR = "/Volumes/dsl_dev/internal/ocsf_mapper/preset_library"
 DEFAULT_OUTPUT_DIR = "/Volumes/dsl_dev/internal/ocsf_mapper/generated_presets"
 DEFAULT_CACHE_DIR = "/Volumes/dsl_dev/internal/ocsf_mapper/schema_cache"
-DEFAULT_STAGING_DIR = "/Volumes/dsl_dev/internal/ocsf_mapper/staging"
+DEFAULT_OCSF_VERSION = "1.7.0"
 
 # ─── Volume access (Databricks SDK) ──────────────────────────────────────────
 
@@ -144,43 +137,6 @@ def _safe_filename(vendor: str, source_type: str) -> str:
     base = re.sub(r"[^a-zA-Z0-9_\-]", "_", base).strip("_").lower()
     return base or "preset"
 
-def submit_for_review(
-    preset_text: str,
-    report_text: str,
-    vendor: str,
-    source_type: str,
-    result: dict,
-) -> tuple[str, str]:
-    """Stage a preset submission to the volume for the promoter to pick up.
-
-    Returns (submission_id, base_path).
-    """
-    user = get_current_user()
-    email = user.get("email") or "unknown@unknown"
-    ts = datetime.utcnow().strftime("%Y%m%dT%H%M%SZ")
-    safe_name = _safe_filename(vendor or "preset", source_type or "gen")
-    submission_id = f"{ts}_{safe_name}"
-    base = f"{DEFAULT_STAGING_DIR}/pending/{submission_id}"
-
-    metadata = {
-        "submission_id": submission_id,
-        "vendor": vendor,
-        "source_type": source_type,
-        "submitted_by_email": email,
-        "submitted_by_user": user.get("preferred_username") or email,
-        "submitted_at": datetime.utcnow().isoformat() + "Z",
-        "ocsf_version": st.session_state.ocsf_version,
-        "ocsf_classes": [c["uid"] for c in result.get("classes", [])],
-        "references_used": result.get("references_used", []),
-        "tool_version": "ocsf_mapper_app_v3",
-    }
-
-    volume_write_text(f"{base}/preset.yaml", preset_text)
-    volume_write_text(f"{base}/report.md", report_text)
-    volume_write_text(f"{base}/metadata.json", json.dumps(metadata, indent=2))
-
-    return submission_id, base
-
 
 def _html_escape(text: str) -> str:
     """Escape HTML for safe rendering inside markdown(unsafe_allow_html=True)."""
@@ -233,7 +189,7 @@ def _init_state():
         "prefill_inspect_path": "",
         "inspect_pending": False,
         "api_key": os.environ.get("ANTHROPIC_API_KEY", ""),
-        "ocsf_version": "1.8.0",
+        "ocsf_version": DEFAULT_OCSF_VERSION,
         "reference_dir": DEFAULT_REFERENCE_DIR,
         "output_dir": DEFAULT_OUTPUT_DIR,
     }
@@ -448,7 +404,7 @@ def _ocsf_version_exists(version: str) -> tuple[bool, str]:
 with st.sidebar:
     st.header("Configuration")
     st.session_state.api_key = st.text_input("Anthropic API key", value=st.session_state.api_key, type="password")
-    _common_versions = ["1.8.0", "1.7.0", "1.6.0", "1.5.0", "1.4.0", "1.3.0", "Other..."]
+    _common_versions = ["1.7.0", "1.6.0", "1.5.0", "1.4.0", "1.3.0", "Other..."]
     _current = st.session_state.ocsf_version
     _default_idx = _common_versions.index(_current) if _current in _common_versions else len(_common_versions) - 1
     _picked = st.selectbox("OCSF version", _common_versions, index=_default_idx, key="ocsf_version_picker")
@@ -456,7 +412,7 @@ with st.sidebar:
         st.session_state.ocsf_version = st.text_input(
             "Custom version",
             value=_current if _current not in _common_versions else "",
-            placeholder="e.g. 1.2.0, 1.9.0",
+            placeholder="e.g. 1.2.0",
             help="Any version available at schema.ocsf.io",
         )
     else:
@@ -641,6 +597,21 @@ def render_generator_tab():
 
     if st.session_state.result:
         st.divider()
+
+        # Surface OCSF data-type validation findings prominently.
+        type_findings = st.session_state.result.get("type_findings", [])
+        if type_findings:
+            errors = [f for f in type_findings if f["level"] == "error"]
+            warnings = [f for f in type_findings if f["level"] == "warning"]
+            kind = "err" if errors else "warn"
+            status_pill(
+                f"⚠ OCSF type check: {len(errors)} error(s), {len(warnings)} warning(s) — "
+                f"see the Generation report tab and fix before saving.",
+                kind,
+            )
+        else:
+            status_pill("✓ OCSF type check passed — no datatype violations.", "ok")
+
         tab_preset, tab_report = st.tabs(["📝 Preset (editable)", "📋 Generation report"])
         with tab_preset:
             from streamlit_ace import st_ace
@@ -649,8 +620,8 @@ def render_generator_tab():
                 value=st.session_state.preset_text,
                 language="yaml",
                 theme="tomorrow_night_blue",   # matches your dark slate/navy palette
-                height=700,                     # was 500 — more breathing room
-                font_size=15,                   # was browser default ~13
+                height=700,
+                font_size=15,
                 tab_size=2,
                 wrap=True,
                 show_gutter=True,               # line numbers
@@ -660,10 +631,10 @@ def render_generator_tab():
             )
             st.session_state.preset_text = edited
 
-            col_save, col_dl, col_submit = st.columns(3)
+            col_save, col_dl = st.columns(2)
 
             with col_save:
-                if st.button("💾 Save preset to Volume", use_container_width=True):
+                if st.button("💾 Save preset to Volume", use_container_width=True, type="primary"):
                     try:
                         ts = datetime.now().strftime("%Y%m%d_%H%M%S")
                         base = _safe_filename(vendor or "preset", source_type or "gen")
@@ -685,25 +656,6 @@ def render_generator_tab():
                     use_container_width=True,
                 )
 
-            with col_submit:
-                if st.button("📤 Submit for review", use_container_width=True, type="primary"):
-                    try:
-                        sid, base_path = submit_for_review(
-                            preset_text=edited,
-                            report_text=st.session_state.report_text,
-                            vendor=vendor,
-                            source_type=source_type,
-                            result=st.session_state.result,
-                        )
-                        st.session_state.save_message = (
-                            f"✓ Submitted for review\n"
-                            f"- Submission ID: `{sid}`\n"
-                            f"- Staged at: `{base_path}/`\n"
-                            f"- A PR will be opened against `dev_action_automate_test` shortly."
-                        )
-                    except Exception as e:
-                        st.session_state.save_message = f"Submission failed: {e}"
-
             if st.session_state.save_message:
                 if st.session_state.save_message.startswith("✓"):
                     st.success(st.session_state.save_message)
@@ -711,7 +663,7 @@ def render_generator_tab():
                     st.error(st.session_state.save_message)
         with tab_report:
             st.markdown(st.session_state.report_text)
-            
+
 # ─── Tab 2: Sample Inspector ─────────────────────────────────────────────────
 
 def render_inspector_tab():

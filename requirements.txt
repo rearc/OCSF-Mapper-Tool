@@ -1,4 +1,0 @@
-streamlit>=1.30
-streamlit-ace>=0.1.1
-databricks-sdk>=0.30
-/Volumes/dsl_dev/internal/ocsf_mapper/ocsf_mapper-0.3.2-py3-none-any.whl
