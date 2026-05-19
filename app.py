@@ -6,7 +6,7 @@ v4 changes:
   - Removed the "Submit for review" / PR-staging flow. The app now generates,
     validates, and lets the user Save to Volume or Download. Promotion to the
     repo (PR creation) is handled outside this app.
-  - OCSF version default corrected to 1.7.0 (1.8.0 does not exist).
+  - OCSF version default set to 1.8.0 (latest; released March 2026).
 """
 from __future__ import annotations
 
@@ -38,7 +38,7 @@ DEFAULT_REFERENCE_DIR = "/Volumes/dsl_dev/internal/ocsf_mapper/preset_library"
 DEFAULT_OUTPUT_DIR = "/Volumes/dsl_dev/internal/ocsf_mapper/generated_presets"
 DEFAULT_CACHE_DIR = "/Volumes/dsl_dev/internal/ocsf_mapper/schema_cache"
 DEFAULT_ADVISORY_DIR = "/Volumes/dsl_dev/internal/ocsf_mapper/advisory"
-DEFAULT_OCSF_VERSION = "1.7.0"
+DEFAULT_OCSF_VERSION = "1.8.0"
 
 # ─── Volume access (Databricks SDK) ──────────────────────────────────────────
 
@@ -439,7 +439,7 @@ def _ocsf_version_exists(version: str) -> tuple[bool, str]:
 with st.sidebar:
     st.header("Configuration")
     st.session_state.api_key = st.text_input("Anthropic API key", value=st.session_state.api_key, type="password")
-    _common_versions = ["1.7.0", "1.6.0", "1.5.0", "1.4.0", "1.3.0", "Other..."]
+    _common_versions = ["1.8.0", "1.7.0", "1.6.0", "1.5.0", "1.4.0", "1.3.0", "Other..."]
     _current = st.session_state.ocsf_version
     _default_idx = _common_versions.index(_current) if _current in _common_versions else len(_common_versions) - 1
     _picked = st.selectbox("OCSF version", _common_versions, index=_default_idx, key="ocsf_version_picker")

@@ -1,8 +1,9 @@
 """Advisory context loader.
 
-The advisory folder holds free-form team guidance — OCSF type rules, naming
-conventions, known platform gotchas — that should shape every generated
-preset regardless of which OCSF class is targeted.
+The advisory folder holds free-form preset-generation instructions — naming
+conventions, layer-by-layer rules, known platform gotchas — written as direct
+instructions to the model. (OCSF data-type rules live in ocsf_types.py and are
+injected separately; the advisory folder is for the evolving conventions.)
 
 Why this is separate from the preset library
 ---------------------------------------------

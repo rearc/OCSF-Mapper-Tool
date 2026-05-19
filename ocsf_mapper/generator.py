@@ -85,11 +85,10 @@ Set `autoloader.format` accordingly. If `json_wrapped`, note that bronze must ex
 
 {multi_class_guidance}
 
-## Team advisory / conventions
+## Preset conventions
 
-Authoritative team guidance — naming conventions, OCSF type rules, known
-platform gotchas. These instructions OVERRIDE anything inferred from the
-style reference below. Follow them exactly.
+Authoritative instructions for this preset. Follow them exactly. They
+OVERRIDE any conflicting pattern in the style reference below.
 
 {advisory}
 
@@ -136,7 +135,7 @@ def generate_preset(
     vendor: str,
     source_type: str,
     class_uids: list[int] | int,
-    ocsf_version: str = "1.7.0",
+    ocsf_version: str = "1.8.0",
     style_reference_path: str | None = None,
     reference_dir: str | None = None,
     advisory_dir: str | None = None,
@@ -219,7 +218,7 @@ def generate_preset(
     else:
         style_ref = ""
 
-    # Load team advisory context (OCSF type rules, conventions, gotchas).
+    # Load preset-convention instructions from the advisory folder.
     # A missing/empty advisory folder is fine — yields "".
     advisory_text = load_advisory(advisory_dir)
 
@@ -235,7 +234,7 @@ def generate_preset(
         fmt_notes=fmt["notes"],
         target_classes_schemas=target_classes_schemas,
         multi_class_guidance=multi_class_guidance,
-        advisory=advisory_text or "(no team advisory file configured)",
+        advisory=advisory_text or "(no advisory file configured)",
         style_reference=style_ref or "(no style reference — follow system-prompt conventions)",
     )
 
@@ -329,7 +328,7 @@ def cli():
     ap.add_argument("--source-type")
     ap.add_argument("--class-uid", type=str,
                     help="OCSF class_uid, or comma-separated list (e.g. 2002,5020). Run --list-classes to see options.")
-    ap.add_argument("--ocsf-version", default="1.7.0")
+    ap.add_argument("--ocsf-version", default="1.8.0")
     ap.add_argument("--style-reference", default=None)
     ap.add_argument("--out-dir", default="./output")
     ap.add_argument("--cache-dir", default=None)

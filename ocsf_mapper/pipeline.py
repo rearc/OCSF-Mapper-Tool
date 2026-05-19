@@ -33,7 +33,7 @@ def run(
     sample_path: str,
     vendor: str,
     source_type: str,
-    ocsf_version: str = "1.7.0",
+    ocsf_version: str = "1.8.0",
     class_uids: list[int] | None = None,
     confidence_threshold: float = 0.75,
     cache_dir: str | Path | None = None,

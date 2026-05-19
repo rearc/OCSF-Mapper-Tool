@@ -4,7 +4,7 @@ Env vars (widget parameters as env):
   OCSF_SAMPLE_PATH    (required)  path to vendor sample
   OCSF_VENDOR         (required)  vendor short name
   OCSF_SOURCE_TYPE    (required)  source type (e.g. vulnerabilities)
-  OCSF_VERSION        (default 1.7.0)
+  OCSF_VERSION        (default 1.8.0)
   OCSF_CLASS_UIDS     (optional)  comma-separated, skips classifier
   OCSF_CONFIDENCE     (default 0.75)
   OCSF_CACHE_DIR      (default ~/.ocsf_mapper/schema_cache)
@@ -43,7 +43,7 @@ def main() -> int:
                     help="vendor short name (env: OCSF_VENDOR)")
     ap.add_argument("--source-type", default=_get("OCSF_SOURCE_TYPE"),
                     help="source type (env: OCSF_SOURCE_TYPE)")
-    ap.add_argument("--ocsf-version", default=_get("OCSF_VERSION", "1.7.0"),
+    ap.add_argument("--ocsf-version", default=_get("OCSF_VERSION", "1.8.0"),
                     help="OCSF schema version (env: OCSF_VERSION)")
     ap.add_argument("--class-uids", default=_get("OCSF_CLASS_UIDS"),
                     help="comma-sep OCSF class_uids to skip classifier (env: OCSF_CLASS_UIDS)")
